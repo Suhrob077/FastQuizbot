@@ -2,41 +2,30 @@ import os
 import re
 import json
 from docx import Document
-from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-# Ofis formulalarini (OMML) oddiy belgilarga yoki elementlarga o'g'irish
 def parse_math_element(element):
-    """Formula elementlarini (daraja, indeks, kasr) oddiy matnga yoki struktura formatiga o'tkazish"""
     text = ""
     for child in element:
-        # Oddiy matn
         if child.tag.endswith('t'):
-            text += child.text
-        # Daraja (superscript)
+            text += child.text if child.text else ""
         elif child.tag.endswith('superscript') or child.tag.endswith('sup'):
-            text += f"^{{{parse_math_element(child)}}}"
-        # Indeks (subscript)
+            text += f"<sup>{parse_math_element(child)}</sup>"
         elif child.tag.endswith('subscript') or child.tag.endswith('sub'):
-            text += f"_{{{parse_math_element(child)}}}"
-        # Agar ichki boshqa elementlar bo'lsa rekurstiv chaqirish
+            text += f"<sub>{parse_math_element(child)}</sub>"
         elif len(child) > 0:
             text += parse_math_element(child)
     return text
 
 def get_text_with_formatting(paragraph):
-    """Paragraph ichidagi daraja, indeks va formula belgilarini saqlab qolgan holda HTML formatga o'tkazish"""
     p_html = ""
-    # paragraph ichidagi barcha xml elementlarni tekshirish
     for child in paragraph._p:
-        # Agar bu oddiy run (matn bo'lagi) bo'lsa
         if child.tag.endswith('r'):
             rPr = child.find(qn('w:rPr'))
             text_elem = child.find(qn('w:t'))
             if text_elem is not None and text_elem.text:
                 text = text_elem.text
                 if rPr is not None:
-                    # Darajani tekshirish (superscript)
                     vertAlign = rPr.find(qn('w:vertAlign'))
                     if vertAlign is not None:
                         val = vertAlign.get(qn('w:val'))
@@ -47,35 +36,22 @@ def get_text_with_formatting(paragraph):
                             p_html += f"<sub>{text}</sub>"
                             continue
                 p_html += text
-        # Agar bu Office Math (Formula) elementi bo'lsa
         elif child.tag.endswith('oMath'):
-            # MathJax inline formati uchun \( ... \) belgilari ichiga olamiz
-            math_text = "".join(child.itertext())
-            # Ba'zi belgilarni to'g'rilash
+            math_text = parse_math_element(child)
+            if not math_text:
+                math_text = "".join(child.itertext())
             math_text = math_text.replace("²", "<sup>2</sup>").replace("³", "<sup>3</sup>")
             p_html += f" <span class='math-expr'>{math_text}</span> "
     
-    # Agar yuqoridagi xml tahlil bo'sh qaytsa, oddiy matnni olamiz
     if not p_html.strip():
-        p_html = paragraph.text
+        p_html = paragraph.text if paragraph.text else ""
         
-    # Kasr va maxsus belgilarni frontend chiroyli ko'rsatishi uchun qo'shimcha regex almashtirishlar
     p_html = re.sub(r'(\w+)/(\w+)', r'<span class="fraction"><span class="top">\1</span><span class="bottom">\2</span></span>', p_html)
     return p_html.strip()
 
-# =========================================================
-# FIZIKA VA FORMULALI TESTLAR UCHUN YANGI PARSER (YANGILANDI)
-# =========================================================
 def get_quizzes_by_letters(file_path, json_answers_path=None):
-    """
-    Fizika testlarini yangi format bo'yicha o'qiydi:
-    - Testlar '++++' bilan ajratilgan.
-    - Savol va variantlar A), B), C), D) ko'rinishida keladi.
-    - To'g'ri javob oldida '#' belgisi bor (Masalan: #B) chastotaga)
-    """
     try:
         doc = Document(file_path)
-        
         paragraphs_html = []
         for p in doc.paragraphs:
             txt = get_text_with_formatting(p)
@@ -84,7 +60,69 @@ def get_quizzes_by_letters(file_path, json_answers_path=None):
                 
         full_text = "\n".join(paragraphs_html)
         
-        # Testlarni ++++ bo'yicha bloklarga ajratamiz
+        correct_answers = {}
+        if json_answers_path and os.path.exists(json_answers_path):
+            try:
+                with open(json_answers_path, 'r', encoding='utf-8') as f:
+                    answers_data = json.load(f)
+                correct_answers = answers_data.get("fizika_answers", answers_data)
+            except Exception as json_err:
+                print(f"JSON yuklashda xatolik: {json_err}")
+
+        question_blocks = re.split(r'(?=\b\d+\.)', full_text)
+        quiz_data = []
+        letter_to_idx = {"A": 0, "B": 1, "C": 2, "D": 3}
+
+        for block in question_blocks:
+            block = block.strip()
+            if not block: 
+                continue
+            header_match = re.match(r'^(\d+)\.(.*)', block, re.DOTALL)
+            if not header_match: 
+                continue
+                
+            q_num = header_match.group(1).strip()
+            rest_of_text = header_match.group(2).strip()
+            
+            idx_A = rest_of_text.find("A)")
+            idx_B = rest_of_text.find("B)")
+            idx_C = rest_of_text.find("C)")
+            idx_D = rest_of_text.find("D)")
+            
+            if idx_A != -1 and idx_B != -1 and idx_C != -1 and idx_D != -1 and (idx_A < idx_B < idx_C < idx_D):
+                question_content = rest_of_text[:idx_A].strip()
+                opt_A = rest_of_text[idx_A + 2:idx_B].strip()
+                opt_B = rest_of_text[idx_B + 2:idx_C].strip()
+                opt_C = rest_of_text[idx_C + 2:idx_D].strip()
+                opt_D = rest_of_text[idx_D + 2:].strip()
+                
+                options = [opt_A, opt_B, opt_C, opt_D]
+                correct_letter = str(correct_answers.get(q_num, "A")).upper().strip()
+                correct_index = letter_to_idx.get(correct_letter, 0)
+                
+                if question_content:
+                    cleaned_question = re.sub(r'[ \t]+', ' ', question_content).strip()
+                    cleaned_options = [re.sub(r'\|$', '', opt).strip() for opt in options]
+                    
+                    quiz_data.append({
+                        "question": f"{q_num}. {cleaned_question}",
+                        "options": cleaned_options,
+                        "correct": correct_index
+                    })
+        return quiz_data
+    except Exception as e:
+        print(f"Fizika parser xatosi: {e}")
+        return []
+
+def get_quizzes(file_path):
+    try:
+        doc = Document(file_path)
+        paragraphs = []
+        for p in doc.paragraphs:
+            t = get_text_with_formatting(p)
+            if t: 
+                paragraphs.append(t)
+        full_text = "\n".join(paragraphs)
         raw_questions = full_text.split("++++")
         quiz_data = []
 
@@ -92,75 +130,9 @@ def get_quizzes_by_letters(file_path, json_answers_path=None):
             item = item.strip()
             if not item: 
                 continue
-            
-            # Variantlarning indekslarini matndan qidiramiz
-            # Variant boshida # belgisi bo'lishi yoki bo'lmasligini hisobga olamiz
-            idx_A = re.search(r'(?:#)?A\)', item)
-            idx_B = re.search(r'(?:#)?B\)', item)
-            idx_C = re.search(r'(?:#)?C\)', item)
-            idx_D = re.search(r'(?:#)?D\)', item)
-            
-            if idx_A and idx_B and idx_C and idx_D:
-                start_A = idx_A.start()
-                start_B = idx_B.start()
-                start_C = idx_C.start()
-                start_D = idx_D.start()
-                
-                # Agar variantlar ketma-ketligi to'g'ri bo'lsa
-                if start_A < start_B < start_C < start_D:
-                    # Savol matnini ajratib olamiz va tozalaymiz
-                    question_text = item[:start_A].strip()
-                    
-                    # Variantlar matnini kesib olamiz
-                    opt_A_raw = item[start_A:start_B].strip()
-                    opt_B_raw = item[start_B:start_C].strip()
-                    opt_C_raw = item[start_C:start_D].strip()
-                    opt_D_raw = item[start_D:].strip()
-                    
-                    raw_options = [opt_A_raw, opt_B_raw, opt_C_raw, opt_D_raw]
-                    final_options = []
-                    correct_index = 0
-                    
-                    for idx, opt in enumerate(raw_options):
-                        # Agar variant # bilan boshlansa, bu to'g'ri javob
-                        if opt.startswith("#"):
-                            correct_index = idx
-                        
-                        # Variant boshidagi #, A), B), C), D) va ortiqcha bo'shliqlarni tozalash
-                        cleaned_opt = re.sub(r'^#?[A-D]\)\s*', '', opt).strip()
-                        final_options.append(cleaned_opt)
-                    
-                    if question_text and len(final_options) == 4:
-                        quiz_data.append({
-                            "question": question_text,
-                            "options": final_options,
-                            "correct": correct_index
-                        })
-                        
-        return quiz_data
-    except Exception as e:
-        print(f"Fizika yangi parser xatosi: {e}")
-        return []
-
-# =========================================================
-# STANDART VA BOSHQA PARSERLAR (O'zgarishsiz qoldi)
-# =========================================================
-def get_quizzes(file_path):
-    try:
-        doc = Document(file_path)
-        paragraphs = []
-        for p in doc.paragraphs:
-            t = get_text_with_formatting(p)
-            if t: paragraphs.append(t)
-        full_text = "\n".join(paragraphs)
-        raw_questions = full_text.split("++++")
-        quiz_data = []
-
-        for item in raw_questions:
-            item = item.strip()
-            if not item: continue
             parts = item.split("====")
-            if len(parts) < 2: continue
+            if len(parts) < 2: 
+                continue
             
             question_text = parts[0].strip()
             options_raw = [p.strip() for p in parts[1:] if p.strip()]
@@ -220,7 +192,8 @@ def get_quizzes_programming(file_path):
         return []
 
 def normalize_text(text):
-    if not text: return ""
+    if not text: 
+        return ""
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
     text = re.sub(r'\s+', ' ', text)
     return text.strip().lower()
@@ -228,12 +201,15 @@ def normalize_text(text):
 def calculate_similarity(text1, text2):
     norm1 = normalize_text(text1)
     norm2 = normalize_text(text2)
-    if not norm1 or not norm2: return 0
-    if norm1 == norm2: return 100
+    if not norm1 or not norm2: 
+        return 0
+    if norm1 == norm2: 
+        return 100
     words1 = set(norm1.split())
     words2 = set(norm2.split())
     union = len(words1.union(words2))
-    if union == 0: return 0
+    if union == 0: 
+        return 0
     return (len(words1.intersection(words2)) / union) * 100
 
 def get_quizzes_english_pdf_docx(docx_path, pdf_path):
@@ -243,15 +219,77 @@ def get_quizzes_english_pdf_docx(docx_path, pdf_path):
         if os.path.exists(pdf_path):
             with pdfplumber.open(pdf_path) as pdf:
                 for page in pdf.pages:
-                    for char in page.chars:
+                    chars = page.chars
+                    current_word = []
+                    for char in chars:
                         color = char.get("non_stroking_color") or char.get("stroking_color")
+                        is_red = False
                         if color and len(color) == 3:
                             r, g, b = color
-                            if (r > 0.6 and g < 0.4 and b < 0.4):
-                                pdf_red_texts.append(char["text"])
+                            if (r > 0.6 and g < 0.4 and b < 0.4) or (isinstance(r, int) and r > 150 and g < 100 and b < 100):
+                                is_red = True
+                        if is_red:
+                            current_word.append(char["text"])
+                        else:
+                            if current_word:
+                                word_str = "".join(current_word).strip()
+                                if word_str and not word_str.isdigit() and len(word_str) > 1:
+                                    pdf_red_texts.append(word_str)
+                                current_word = []
+                    if current_word:
+                        word_str = "".join(current_word).strip()
+                        if word_str and not word_str.isdigit() and len(word_str) > 1:
+                            pdf_red_texts.append(word_str)
         
         doc = Document(docx_path)
-        raw_lines = [get_text_with_formatting(p) for p in doc.paragraphs if p.text.strip()]
-        return [] 
-    except:
+        clean_lines = []
+        for p in doc.paragraphs:
+            line = get_text_with_formatting(p)
+            if line:
+                if set(line).issubset({'_', '=', '+', '-', '*', ' ', '—'}) and len(line) > 1:
+                    continue
+                clean_lines.append(line)
+        
+        i = 0
+        docx_quizzes = []
+        while i < len(clean_lines):
+            line = clean_lines[i]
+            if any(phrase in line.lower() for phrase in ["choose the correct", "choose the word", "choose the best", "select the correct", "complete the sentence", "it is a group"]):
+                question_text = line
+                options = []
+                i += 1
+                while i < len(clean_lines):
+                    current_line = clean_lines[i]
+                    if any(phrase in current_line.lower() for phrase in ["choose the correct", "choose the word", "choose the best", "select the correct", "complete the sentence", "it is a group"]):
+                        break
+                    if current_line and len(current_line) < 200:
+                        options.append(current_line)
+                    i += 1
+                if len(options) >= 2:
+                    docx_quizzes.append({
+                        "question": question_text,
+                        "options": options
+                    })
+            else:
+                i += 1
+                
+        quiz_data = []
+        for docx_quiz in docx_quizzes:
+            best_correct_idx = 0
+            best_overall_score = 0
+            for opt_idx, option in enumerate(docx_quiz["options"]):
+                for pdf_text in pdf_red_texts:
+                    similarity = calculate_similarity(pdf_text, option)
+                    if similarity > best_overall_score:
+                        best_overall_score = similarity
+                        best_correct_idx = opt_idx
+            
+            quiz_data.append({
+                "question": docx_quiz["question"],
+                "options": docx_quiz["options"],
+                "correct": best_correct_idx
+            })
+        return quiz_data
+    except Exception as e:
+        print(f"Ingliz tili PDF+DOCX parser xatosi: {e}")
         return []
