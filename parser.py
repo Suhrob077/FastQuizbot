@@ -64,13 +64,18 @@ def get_text_with_formatting(paragraph):
     return p_html.strip()
 
 # =========================================================
-# FIZIKA VA FORMULALI TESTLAR UCHUN PARSER
+# FIZIKA VA FORMULALI TESTLAR UCHUN YANGI PARSER (YANGILANDI)
 # =========================================================
 def get_quizzes_by_letters(file_path, json_answers_path=None):
+    """
+    Fizika testlarini yangi format bo'yicha o'qiydi:
+    - Testlar '++++' bilan ajratilgan.
+    - Savol va variantlar A), B), C), D) ko'rinishida keladi.
+    - To'g'ri javob oldida '#' belgisi bor (Masalan: #B) chastotaga)
+    """
     try:
         doc = Document(file_path)
         
-        # Har bir paragrafni formatini saqlab string ro'yxatiga o'giramiz
         paragraphs_html = []
         for p in doc.paragraphs:
             txt = get_text_with_formatting(p)
@@ -79,58 +84,62 @@ def get_quizzes_by_letters(file_path, json_answers_path=None):
                 
         full_text = "\n".join(paragraphs_html)
         
-        correct_answers = {}
-        if json_answers_path and os.path.exists(json_answers_path):
-            try:
-                with open(json_answers_path, 'r', encoding='utf-8') as f:
-                    answers_data = json.load(f)
-                correct_answers = answers_data.get("fizika_answers", answers_data)
-            except Exception as json_err:
-                print(f"JSON yuklashda xatolik: {json_err}")
-
-        # Savollarni raqamlar bo'yicha ajratish (Masalan: 64. yoki 65.)
-        question_blocks = re.split(r'(?=\b\d+\.)', full_text)
+        # Testlarni ++++ bo'yicha bloklarga ajratamiz
+        raw_questions = full_text.split("++++")
         quiz_data = []
-        letter_to_idx = {"A": 0, "B": 1, "C": 2, "D": 3}
 
-        for block in question_blocks:
-            block = block.strip()
-            if not block: continue
-            header_match = re.match(r'^(\d+)\.(.*)', block, re.DOTALL)
-            if not header_match: continue
-                
-            q_num = header_match.group(1).strip()
-            rest_of_text = header_match.group(2).strip()
+        for item in raw_questions:
+            item = item.strip()
+            if not item: 
+                continue
             
-            # Variantlar indeksini aniqlash
-            idx_A = rest_of_text.find("A)")
-            idx_B = rest_of_text.find("B)")
-            idx_C = rest_of_text.find("C)")
-            idx_D = rest_of_text.find("D)")
+            # Variantlarning indekslarini matndan qidiramiz
+            # Variant boshida # belgisi bo'lishi yoki bo'lmasligini hisobga olamiz
+            idx_A = re.search(r'(?:#)?A\)', item)
+            idx_B = re.search(r'(?:#)?B\)', item)
+            idx_C = re.search(r'(?:#)?C\)', item)
+            idx_D = re.search(r'(?:#)?D\)', item)
             
-            if idx_A != -1 and idx_B != -1 and idx_C != -1 and idx_D != -1 and (idx_A < idx_B < idx_C < idx_D):
-                question_content = rest_of_text[:idx_A].strip()
-                opt_A = rest_of_text[idx_A + 2:idx_B].strip()
-                opt_B = rest_of_text[idx_B + 2:idx_C].strip()
-                opt_C = rest_of_text[idx_C + 2:idx_D].strip()
-                opt_D = rest_of_text[idx_D + 2:].strip()
+            if idx_A and idx_B and idx_C and idx_D:
+                start_A = idx_A.start()
+                start_B = idx_B.start()
+                start_C = idx_C.start()
+                start_D = idx_D.start()
                 
-                options = [opt_A, opt_B, opt_C, opt_D]
-                correct_letter = str(correct_answers.get(q_num, "A")).upper().strip()
-                correct_index = letter_to_idx.get(correct_letter, 0)
-                
-                if question_content:
-                    cleaned_question = re.sub(r'[ \t]+', ' ', question_content).strip()
-                    cleaned_options = [re.sub(r'\|$', '', opt).strip() for opt in options]
+                # Agar variantlar ketma-ketligi to'g'ri bo'lsa
+                if start_A < start_B < start_C < start_D:
+                    # Savol matnini ajratib olamiz va tozalaymiz
+                    question_text = item[:start_A].strip()
                     
-                    quiz_data.append({
-                        "question": f"{q_num}. {cleaned_question}",
-                        "options": cleaned_options,
-                        "correct": correct_index
-                    })
+                    # Variantlar matnini kesib olamiz
+                    opt_A_raw = item[start_A:start_B].strip()
+                    opt_B_raw = item[start_B:start_C].strip()
+                    opt_C_raw = item[start_C:start_D].strip()
+                    opt_D_raw = item[start_D:].strip()
+                    
+                    raw_options = [opt_A_raw, opt_B_raw, opt_C_raw, opt_D_raw]
+                    final_options = []
+                    correct_index = 0
+                    
+                    for idx, opt in enumerate(raw_options):
+                        # Agar variant # bilan boshlansa, bu to'g'ri javob
+                        if opt.startswith("#"):
+                            correct_index = idx
+                        
+                        # Variant boshidagi #, A), B), C), D) va ortiqcha bo'shliqlarni tozalash
+                        cleaned_opt = re.sub(r'^#?[A-D]\)\s*', '', opt).strip()
+                        final_options.append(cleaned_opt)
+                    
+                    if question_text and len(final_options) == 4:
+                        quiz_data.append({
+                            "question": question_text,
+                            "options": final_options,
+                            "correct": correct_index
+                        })
+                        
         return quiz_data
     except Exception as e:
-        print(f"Fizika parser xatosi: {e}")
+        print(f"Fizika yangi parser xatosi: {e}")
         return []
 
 # =========================================================
@@ -228,7 +237,6 @@ def calculate_similarity(text1, text2):
     return (len(words1.intersection(words2)) / union) * 100
 
 def get_quizzes_english_pdf_docx(docx_path, pdf_path):
-    # Ingliz tili kodi o'zgarishsiz qoladi, asosiysi HTML formatda qaytishi ta'minlangan
     try:
         import pdfplumber
         pdf_red_texts = []
@@ -244,9 +252,6 @@ def get_quizzes_english_pdf_docx(docx_path, pdf_path):
         
         doc = Document(docx_path)
         raw_lines = [get_text_with_formatting(p) for p in doc.paragraphs if p.text.strip()]
-        
-        # Soddalashtirilgan logika (oldingi parseringiz mantiqi bo'yicha)
-        # ... (Sizda bor ingliz tili mantiqiy kodi shu yerda davom etadi)
         return [] 
     except:
         return []
