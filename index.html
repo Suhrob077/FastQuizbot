@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fast Quiz Platformasi</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <style>
-        /* Kasrlarni chiroyli matematik ko'rinishga keltirish */
         .fraction {
             display: inline-flex;
             flex-direction: column;
@@ -18,6 +22,9 @@
         .fraction .top {
             border-bottom: 2px solid #374151;
             padding-bottom: 1px;
+        }
+        .dark .fraction .top {
+            border-bottom-color: #e5e7eb;
         }
         .fraction .bottom {
             padding-top: 1px;
@@ -31,103 +38,209 @@
             border-radius: 4px;
             white-space: nowrap;
         }
+        .dark .math-expr {
+            background-color: #374151;
+        }
 
-        /* TELEFONLAR UCHUN MAXSUS MEDIA SOZLAMALARI (RESPONSIVE) */
-        @media (max-width: 640px) {
-            body {
-                padding: 8px;
-            }
-            /* Karta chetlaridagi bo'shliqlarni ixchamlashtirish */
-            .bg-white {
-                padding: 1.25rem !important; 
-                border-radius: 0.75rem !important;
-            }
-            /* Savol sarlavhasi shrifti */
-            #question-text {
-                font-size: 1.05rem !important;
-                line-height: 1.5 !important;
-                margin-bottom: 1rem !important;
-                overflow-x: auto; /* Agar juda uzun formula bo'lsa ekranga sig'ib skrol bo'ladi */
-                padding-bottom: 4px;
-            }
-            /* Variantlar (Tugmalar) shrifti va dizayni */
-            #options-container button {
-                font-size: 0.95rem !important;
-                padding: 0.75rem !important;
-                overflow-x: auto;
-                white-space: normal; /* Matn pastga tushadi */
-            }
-            /* Kasrlar shriftini telefon ekraniga moslab biroz kichraytirish */
-            .fraction {
-                font-size: 0.85em;
-            }
-            /* Sarlavhalar */
-            h1, h2 {
-                font-size: 1.5rem !important;
-                margin-bottom: 1rem !important;
-            }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563;
         }
     </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-100 dark:bg-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-300 relative overflow-x-hidden">
 
-    <div id="setup-card" class="bg-white p-8 rounded-xl shadow-md max-w-md w-full">
-        <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">🎓 Quiz Tizimi</h1>
-        
-        <div class="mb-4">
-            <label class="block text-gray-700 font-semibold mb-2">Fanni tanlang:</label>
-            <select id="subject-select" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            </select>
-        </div>
-
-        <div class="mb-6">
-            <label class="block text-gray-700 font-semibold mb-2">Savollar soni:</label>
-            <select id="count-select" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="20">20 ta</option>
-                <option value="25">25 ta</option>
-                <option value="30">30 ta</option>
-                <option value="50">50 ta</option>
-                <option value="100">100 ta</option>
-                <option value="all">Barchasi (Max) 🚀</option>
-            </select>
-        </div>
-
-        <button onclick="startQuiz()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-            Testni Boshlash 🚀
+    <!-- YUQORI BOSHLACHGʻICH PANEL -->
+    <div id="top-bar" class="absolute top-4 left-4 right-4 max-w-4xl mx-auto flex justify-between items-center z-10 px-2">
+        <button onclick="toggleDarkMode()" class="p-2.5 bg-white dark:bg-gray-800 rounded-xl shadow-md text-gray-700 dark:text-gray-300 hover:scale-105 transition-all">
+            <span id="theme-icon" class="text-xl">🌙</span>
         </button>
-    </div>
-
-    <div id="quiz-card" class="bg-white p-8 rounded-xl shadow-md max-w-2xl w-full hidden">
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-            <span id="quiz-progress" class="text-sm font-semibold text-gray-500">Savol: 1/20</span>
-            <button onclick="exitQuiz()" class="text-sm bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200">To'xtatish 🛑</button>
-        </div>
         
-        <div id="question-text" class="text-lg font-medium text-gray-800 mb-6 leading-relaxed">Savol matni...</div>
-        
-        <div id="options-container" class="space-y-3">
+        <div class="flex items-center bg-white dark:bg-gray-800 px-3 py-2 rounded-xl shadow-md border dark:border-gray-700">
+            <span class="text-xs font-bold mr-2 text-gray-600 dark:text-gray-300 uppercase tracking-wider">Sessiya Rejimi:</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="session-toggle" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+            </label>
         </div>
     </div>
 
-    <div id="result-card" class="bg-white p-8 rounded-xl shadow-md max-w-md w-full text-center hidden">
-        <h2 class="text-3xl font-bold text-green-600 mb-4">🏁 Yakunlandi!</h2>
-        <div class="text-xl mb-2" id="result-score">To'g'ri javoblar: 0 / 0</div>
-        <div class="text-2xl font-bold text-indigo-600 mb-6" id="result-ball">Ball: 0/40</div>
-        <button onclick="exitQuiz()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition">
-            Bosh sahifaga qaytish
-        </button>
+    <!-- MAIN WRAPPER (TEST VA YON PANEL UCHUN KONTEYNER) -->
+    <div class="w-full max-w-5xl flex gap-6 items-start justify-center mt-12">
+        
+        <!-- 1. SETUP CARD -->
+        <div id="setup-card" class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl max-w-md w-full border dark:border-gray-700 transition-all z-20">
+            <h1 class="text-3xl font-extrabold text-center text-indigo-600 dark:text-indigo-400 mb-6 flex justify-center items-center gap-2">
+                <span>🎓</span> Fast Quiz
+            </h1>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 dark:text-gray-300 font-semibold mb-2">Fanni tanlang:</label>
+                <select id="subject-select" class="w-full p-2.5 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-gray-700 dark:text-gray-300 font-semibold mb-2">Savollar soni:</label>
+                <select id="count-select" class="w-full p-2.5 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <option value="20">20 ta</option>
+                    <option value="25">25 ta</option>
+                    <option value="30">30 ta</option>
+                    <option value="50">50 ta</option>
+                    <option value="all">Barchasi (Max) 🚀</option>
+                </select>
+            </div>
+
+            <button onclick="startQuiz()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:shadow-indigo-500/30 transition transform hover:-translate-y-0.5">
+                Testni Boshlash 🚀
+            </button>
+        </div>
+
+        <!-- 2. QUIZ CARD -->
+        <div id="quiz-card" class="bg-white dark:bg-gray-800 p-5 sm:p-8 rounded-2xl shadow-xl flex-1 max-w-2xl w-full hidden border dark:border-gray-700 transition-all duration-300">
+            <!-- Test Yuqori Paneli -->
+            <div class="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-3">
+                <span id="quiz-progress" class="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-3 py-1 rounded-md">Savol: 1/20</span>
+                
+                <!-- Burger Menu Tugmasi (Faqat test boshlanganda chiqadi) -->
+                <button onclick="toggleSidebar()" class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 text-gray-700 dark:text-gray-300 transition flex items-center gap-1">
+                    <span class="text-lg">⚙️</span> <span class="text-xs font-bold uppercase hidden sm:inline">Menyu</span>
+                </button>
+            </div>
+            
+            <!-- Savol Matni -->
+            <div id="question-text" class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6 leading-relaxed">Savol matni...</div>
+            
+            <!-- Variantlar -->
+            <div id="options-container" class="space-y-3 mb-4"></div>
+
+            <!-- Faqat Sessiya rejimida chiqadigan pastki qism -->
+            <div id="session-footer" class="hidden flex justify-between items-center border-t dark:border-gray-700 pt-4 mt-4">
+                <button id="prev-btn" onclick="navigateQuestion(-1)" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg disabled:opacity-40 transition">⬅️ Orqaga</button>
+                <button id="next-btn" onclick="navigateQuestion(1)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg disabled:opacity-40 transition">Oldinga ➡️</button>
+            </div>
+        </div>
+
+        <!-- 3. KREATIV YON PANEL (SIDEBAR) -->
+        <div id="sidebar-panel" class="fixed top-0 right-0 h-full w-80 bg-white dark:bg-gray-800 shadow-2xl border-l dark:border-gray-700 transform translate-x-full transition-transform duration-300 ease-in-out z-50 p-6 flex flex-col justify-between hidden">
+            <div>
+                <!-- Yopish tugmasi -->
+                <div class="flex justify-between items-center mb-6 border-b dark:border-gray-700 pb-3">
+                    <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Boshqaruv Paneli</h3>
+                    <button onclick="toggleSidebar()" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-2xl font-bold">&times;</button>
+                </div>
+
+                <!-- Foydali Amallar -->
+                <div class="space-y-3 mb-6">
+                    <button onclick="toggleDarkModeInSidebar()" class="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 transition">
+                        <span>Mavzuni o'zgartirish</span>
+                        <span id="sidebar-theme-icon">🌙</span>
+                    </button>
+                    <button id="sidebar-finish-btn" onclick="showResults()" class="w-full flex items-center gap-2 justify-center p-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold transition shadow-md shadow-amber-500/20">
+                        🏁 Testni Yakunlash
+                    </button>
+                </div>
+
+                <!-- Dinamik Savollar Jadvali Xaritasi (Faqat Sessiya Yoqilganda Ko'rinadi) -->
+                <div id="grid-wrapper">
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Savollar xaritasi:</p>
+                    <div id="grid-buttons-container" class="grid grid-cols-5 gap-2 max-h-[60vh] overflow-y-auto p-1"></div>
+                </div>
+            </div>
+
+            <!-- Chiqish tugmasi pastda -->
+            <button onclick="exitQuiz()" class="w-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 p-3 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 font-bold transition text-center border border-red-200 dark:border-red-900">
+                🛑 Testdan Chiqish
+            </button>
+        </div>
+
+        <!-- 4. RESULT CARD -->
+        <div id="result-card" class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl max-w-md w-full text-center hidden border dark:border-gray-700 z-20">
+            <h2 class="text-3xl font-extrabold text-green-600 dark:text-green-400 mb-4 flex justify-center items-center gap-2">
+                <span>🏁</span> Yakunlandi!
+            </h2>
+            <div class="text-xl mb-2 text-gray-700 dark:text-gray-300" id="result-score">To'g'ri javoblar: 0 / 0</div>
+            <div class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mb-6" id="result-ball">Ball: 0/40</div>
+            
+            <div id="result-feedback" class="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 text-sm text-indigo-700 dark:text-indigo-300 rounded-xl mb-6"></div>
+
+            <button onclick="exitQuiz()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition">
+                Bosh sahifaga qaytish
+            </button>
+        </div>
+
     </div>
+
+    <!-- Sidebar orqasidagi qoraytirilgan fon (Overlay) -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0"></div>
 
     <script>
         const API_URL = "/api";
         let questions = [];
         let currentIdx = 0;
-        let correctAnswers = 0;
+        let userAnswers = {}; 
+        let isSessionMode = true; 
+
+        if (localStorage.getItem('dark-mode') === 'true' || (!('dark-mode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            updateThemeIcons(true);
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('dark-mode', isDark);
+            updateThemeIcons(isDark);
+        }
+
+        function toggleDarkModeInSidebar() {
+            toggleDarkMode();
+        }
+
+        function updateThemeIcons(isDark) {
+            const icon = isDark ? '☀️' : '🌙';
+            document.getElementById('theme-icon').innerText = icon;
+            const sidebarIcon = document.getElementById('sidebar-theme-icon');
+            if (sidebarIcon) sidebarIcon.innerText = icon;
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar-panel');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if(sidebar.classList.contains('translate-x-full')) {
+                sidebar.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+                setTimeout(() => {
+                    sidebar.classList.remove('translate-x-full');
+                    overlay.classList.remove('opacity-0');
+                }, 10);
+            } else {
+                sidebar.classList.add('translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => {
+                    sidebar.classList.add('hidden');
+                    overlay.classList.add('hidden');
+                }, 300);
+            }
+        }
 
         async function loadSubjects() {
             try {
-                const res = await fetch(`${API_URL}/subjects`);
-                const data = await res.json();
+                let data = ["Matematika", "Fizika", "Tarix", "Ona tili"];
+                try {
+                    const res = await fetch(`${API_URL}/subjects`);
+                    if(res.ok) data = await res.json();
+                } catch(e) { console.log("Mock rejim faol."); }
+
                 const select = document.getElementById('subject-select');
                 select.innerHTML = data.map(sub => `<option value="${sub}">${sub}</option>`).join('');
             } catch (err) {
@@ -138,19 +251,48 @@
         async function startQuiz() {
             const subject = document.getElementById('subject-select').value;
             const count = document.getElementById('count-select').value;
+            isSessionMode = document.getElementById('session-toggle').checked;
             
             try {
-                const res = await fetch(`${API_URL}/quiz/${subject}?count=${count}`);
-                questions = await res.json();
-                
+                questions = [];
+                try {
+                    const res = await fetch(`${API_URL}/quiz/${subject}?count=${count}`);
+                    if(res.ok) questions = await res.json();
+                } catch(e){}
+
                 if(questions.length === 0) {
-                    alert("Savollar topilmadi!");
-                    return;
+                    const totalQ = count === 'all' ? 15 : parseInt(count);
+                    for(let i=1; i<=totalQ; i++) {
+                        questions.push({
+                            question: `Bu ${subject} fanidan ${i}-namunaviy savol. <span class="math-expr">x <div class="fraction"><span class="top">${i}</span><span class="bottom">2</span></div> + 5 = 10</span> tenglamani yeching.`,
+                            options: [`Variant A (${i})`, `Variant B (${i+1})`, `Variant C (${i+2})`, `Variant D (${i+3})`],
+                            correct: 0 
+                        });
+                    }
                 }
 
                 currentIdx = 0;
-                correctAnswers = 0;
+                userAnswers = {};
 
+                // UI REJIM SOZLAMALARI
+                const sessionFooter = document.getElementById('session-footer');
+                const gridWrapper = document.getElementById('grid-wrapper');
+                const sidebarPanel = document.getElementById('sidebar-panel');
+                sidebarPanel.classList.remove('hidden'); // DOMda mavjudligini ta'minlash
+
+                if (isSessionMode) {
+                    sessionFooter.classList.remove('hidden');
+                    gridWrapper.classList.remove('hidden');
+                    document.getElementById('sidebar-finish-btn').classList.remove('hidden');
+                    renderGrid();
+                } else {
+                    sessionFooter.classList.add('hidden');
+                    gridWrapper.classList.add('hidden');
+                    // Sessiyasiz rejimda darhol tugatish tugmasi yon menyuda kerakmas, chunki oxirgi savolda o'zi tugaydi
+                    document.getElementById('sidebar-finish-btn').classList.add('hidden');
+                }
+
+                document.getElementById('top-bar').classList.add('hidden');
                 document.getElementById('setup-card').classList.add('hidden');
                 document.getElementById('result-card').classList.add('hidden');
                 document.getElementById('quiz-card').classList.remove('hidden');
@@ -161,10 +303,61 @@
             }
         }
 
+        function renderGrid() {
+            const container = document.getElementById('grid-buttons-container');
+            container.innerHTML = '';
+            
+            questions.forEach((_, idx) => {
+                const btn = document.createElement('button');
+                btn.id = `grid-btn-${idx}`;
+                btn.innerText = idx + 1;
+                btn.className = "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm border transition-all duration-200";
+                
+                updateGridButtonState(idx, btn);
+
+                btn.onclick = () => {
+                    currentIdx = idx;
+                    showQuestion();
+                    // Mobil qurilmada jadval bosilsa menyu avtomatik yopiladi
+                    if(window.innerWidth < 640) toggleSidebar();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function updateGridButtonState(idx, btn) {
+            if (!isSessionMode) return;
+            if (!btn) btn = document.getElementById(`grid-btn-${idx}`);
+            if (!btn) return;
+
+            const isAnswered = userAnswers[idx] !== undefined;
+
+            if (currentIdx === idx) {
+                btn.classList.add('ring-2', 'ring-indigo-500', 'scale-105', 'border-indigo-500');
+            } else {
+                btn.classList.remove('ring-2', 'ring-indigo-500', 'scale-105');
+            }
+
+            if (isAnswered) {
+                btn.classList.remove('bg-blue-50', 'dark:bg-blue-950/40', 'text-blue-600', 'dark:text-blue-400', 'border-blue-200');
+                btn.classList.add('bg-green-500', 'text-white', 'border-green-600');
+            } else {
+                btn.classList.remove('bg-green-500', 'text-white', 'border-green-600');
+                btn.classList.add('bg-blue-50', 'dark:bg-blue-950/40', 'text-blue-600', 'dark:text-blue-400', 'border-blue-200', 'dark:border-blue-800');
+            }
+        }
+
         function showQuestion() {
             if (currentIdx >= questions.length) {
                 showResults();
                 return;
+            }
+            if (currentIdx < 0) currentIdx = 0;
+
+            if (isSessionMode) {
+                document.getElementById('prev-btn').disabled = (currentIdx === 0);
+                document.getElementById('next-btn').disabled = (currentIdx === questions.length - 1);
+                questions.forEach((_, idx) => updateGridButtonState(idx));
             }
 
             const q = questions[currentIdx];
@@ -176,46 +369,96 @@
 
             q.options.forEach((option, idx) => {
                 const btn = document.createElement('button');
-                btn.className = "w-full text-left p-3 border rounded-lg hover:bg-indigo-50 transition duration-150 focus:outline-none block leading-relaxed";
+                btn.className = "w-full text-left p-3.5 border dark:border-gray-700 rounded-xl transition duration-150 focus:outline-none block leading-relaxed bg-gray-50 dark:bg-gray-700/40 text-gray-800 dark:text-gray-200 font-medium hover:bg-gray-100 dark:hover:bg-gray-700/60";
                 btn.innerHTML = option;
-                btn.onclick = () => checkAnswer(idx, btn);
+
+                // Oldin tanlangan javob holati (Sessiya rejimi)
+                if (isSessionMode && userAnswers[currentIdx] === idx) {
+                    btn.classList.add('bg-indigo-50', 'dark:bg-indigo-950/60', 'border-indigo-500', 'text-indigo-600', 'dark:text-indigo-400', 'ring-2', 'ring-indigo-400');
+                }
+
+                btn.onclick = () => selectAnswer(idx, btn);
                 container.appendChild(btn);
             });
         }
 
-        function checkAnswer(selectedIdx, buttonElement) {
-            const q = questions[currentIdx];
-            const container = document.getElementById('options-container');
-            
-            Array.from(container.children).forEach(btn => btn.disabled = true);
+        function selectAnswer(selectedIdx, buttonElement) {
+            userAnswers[currentIdx] = selectedIdx;
 
-            if (selectedIdx === q.correct) {
-                correctAnswers++;
-                buttonElement.classList.remove('hover:bg-indigo-50');
-                buttonElement.classList.add('bg-green-100', 'border-green-500', 'text-green-800');
+            if (isSessionMode) {
+                showQuestion(); 
             } else {
-                buttonElement.classList.remove('hover:bg-indigo-50');
-                buttonElement.classList.add('bg-red-100', 'border-red-500', 'text-red-800');
-                Array.from(container.children)[q.correct].classList.add('bg-green-100', 'border-green-500', 'text-green-800');
-            }
+                // SESSIYASIZ REJIM: Javob berilgach navigatsiyasiz avtomatik tekshirish va o'tish
+                const q = questions[currentIdx];
+                const container = document.getElementById('options-container');
+                Array.from(container.children).forEach(btn => btn.disabled = true);
 
-            setTimeout(() => {
-                currentIdx++;
-                showQuestion();
-            }, 1200);
+                if (selectedIdx === q.correct) {
+                    buttonElement.classList.add('bg-green-100', 'dark:bg-green-900/40', 'border-green-500', 'text-green-800', 'dark:text-green-300');
+                } else {
+                    buttonElement.classList.add('bg-red-100', 'dark:bg-red-900/40', 'border-red-500', 'text-red-800', 'dark:text-red-300');
+                    Array.from(container.children)[q.correct].classList.add('bg-green-100', 'dark:bg-green-900/40', 'border-green-500', 'text-green-800', 'dark:text-green-300');
+                }
+
+                setTimeout(() => {
+                    currentIdx++;
+                    showQuestion();
+                }, 1200);
+            }
+        }
+
+        function navigateQuestion(step) {
+            currentIdx += step;
+            showQuestion();
         }
 
         function showResults() {
+            if(isSessionMode) {
+                const answeredCount = Object.keys(userAnswers).length;
+                if(answeredCount < questions.length) {
+                    if(!confirm(`Siz hali ${questions.length - answeredCount} ta savolga javob bermadingiz. Testni baribir yakunlaysizmi?`)) {
+                        return;
+                    }
+                }
+            }
+
+            // Menyuni yopish agarda ochiq bo'lsa
+            const sidebar = document.getElementById('sidebar-panel');
+            if(!sidebar.classList.contains('translate-x-full')) toggleSidebar();
+
+            let correctAnswers = 0;
+            questions.forEach((q, idx) => {
+                if (userAnswers[idx] === q.correct) correctAnswers++;
+            });
+
             document.getElementById('quiz-card').classList.add('hidden');
             document.getElementById('result-card').classList.remove('hidden');
+            
             const ball = (correctAnswers / questions.length) * 40;
             document.getElementById('result-score').innerText = `To'g'ri javoblar: ${correctAnswers} / ${questions.length}`;
             document.getElementById('result-ball').innerText = `Ball: ${ball.toFixed(1)}/40`;
+
+            const feedback = document.getElementById('result-feedback');
+            const foiz = (correctAnswers / questions.length) * 100;
+            if(foiz === 100) {
+                feedback.innerHTML = "🚀 Mukammal natija! 100% to'g'ri. Siz ushbu fanning haqiqiy masterisiz!";
+                feedback.className = "p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 text-sm text-green-700 dark:text-green-300 rounded-xl mb-6";
+            } else if(foiz >= 70) {
+                feedback.innerHTML = "🌟 Juda yaxshi ko'rsatkich! Bilimingiz ancha yuqori darajada.";
+                feedback.className = "p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 text-sm text-blue-700 dark:text-blue-300 rounded-xl mb-6";
+            } else {
+                feedback.innerHTML = "📚 Yomon emas, lekin yanada ko'proq tayyorlanishingiz kerak. Yana urinib ko'ring!";
+                feedback.className = "p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 text-sm text-amber-700 dark:text-amber-300 rounded-xl mb-6";
+            }
         }
 
         function exitQuiz() {
+            const sidebar = document.getElementById('sidebar-panel');
+            if(!sidebar.classList.contains('translate-x-full')) toggleSidebar();
+            
             document.getElementById('quiz-card').classList.add('hidden');
             document.getElementById('result-card').classList.add('hidden');
+            document.getElementById('top-bar').classList.remove('hidden');
             document.getElementById('setup-card').classList.remove('hidden');
         }
 
