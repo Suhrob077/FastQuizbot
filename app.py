@@ -31,7 +31,6 @@ SUBJECTS = {
     "Fizika": "Fizika.docx"  
 }
 ENGLISH_PDF_PATH = "Ingliz_javoblar.pdf"
-ANSWERS_JSON_PATH = "Fizika_answers.json"
 
 @app.get("/api/subjects")
 def get_subjects():
@@ -53,8 +52,8 @@ def get_quiz_questions(subject: str, count: str = "20"):
             pdf_full_path = os.path.join(BASE_DIR, ENGLISH_PDF_PATH)
             all_tests = get_quizzes_english_pdf_docx(file_path, pdf_full_path)
         elif subject == "Fizika":
-            json_full_path = os.path.join(BASE_DIR, ANSWERS_JSON_PATH)
-            all_tests = get_quizzes_by_letters(file_path, json_full_path)
+            # Fizika uchun JSON shart emas, faqat docx faylning o'zi uzatiladi
+            all_tests = get_quizzes_by_letters(file_path)
         else:
             all_tests = get_quizzes(file_path)
     except Exception as e:
